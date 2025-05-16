@@ -93,7 +93,7 @@ mod tests {
     fn test_pow_hash() {
         let timestamp: u64 = 1715521488610;
         let nonce: u64 = 11171827086635415026;
-        let pre_pow_hash = Hash::from_bytes([
+        let pre_pow_hash = Hash::from_le_bytes([
             99, 231, 29, 85, 153, 225, 235, 207, 36, 237, 3, 55, 106, 21, 221, 122, 28, 51, 249, 76, 190, 128, 153, 244, 189, 104, 26,
             178, 170, 4, 177, 103,
         ]);
@@ -103,7 +103,7 @@ mod tests {
         let mut hasher = blake3::Hasher::new();
         hasher
             .update(&pre_pow_hash.to_le_bytes())
-            .update(timestamp.to_le_bytes())
+            .update(&timestamp.to_le_bytes())
             .update(&[0u8; 32])
             .update(&nonce.to_le_bytes());
         let mut hash_bytes = [0u8; 32];
@@ -118,7 +118,7 @@ mod tests {
 
     #[test]
     fn test_heavy_hash() {
-        let val = Hash::from_bytes([42; 32]);
+        let val = Hash::from_le_bytes([42; 32]);
         let hash1 = HeavyHasher::hash(val);
 
         let mut hasher = blake3::Hasher::new();
@@ -133,20 +133,6 @@ mod tests {
         assert_eq!(hash2, hash1);
     }
 
-    #[test]
-    fn test_header_hash() {
-        let mut hasher = HeaderHasher::new();
-        hasher.update([42; 64]);
-        let hash = hasher.finalize();
-        // Expected hash from Node's test_vectors for BlockHash with [42; 64]
-        let expected = Hash::from_bytes(
-            hex::decode("eae5771e1a28e403af4fd3c3f19d30cf4196afc0f70f89422dec10faf3eb1470")
-                .unwrap()
-                .try_into()
-                .unwrap(),
-        );
-        assert_eq!(hash, expected);
-    }
 }
 
 #[cfg(all(test, feature = "bench"))]

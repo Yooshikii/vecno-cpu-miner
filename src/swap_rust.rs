@@ -233,12 +233,12 @@ mod tests {
                 assert_eq!(tx.get_changed().as_deref().map(|a| a.as_deref()), None);
                 assert_eq!(tx2.get_changed().as_deref().map(|a| a.as_deref()), None);
                 let barrier = Arc::new(Barrier::new(3));
-                let barrier_clone = Arc::clone(&barrier);
+                let barrier_clone: Arc<Barrier> = Arc::clone(&barrier);
                 let handle1 = thread::spawn(move || {
                     barrier_clone.wait();
                     assert_eq!(tx.wait_for_change().as_deref().copied(), Some("Two"));
                 });
-                let barrier_clone = Arc::clone(&barrier);
+                let barrier_clone: Arc<Barrier> = Arc::clone(&barrier);
                 let handle2 = thread::spawn(move || {
                     barrier_clone.wait();
                     assert_eq!(tx2.wait_for_change().as_deref().copied(), Some("Two"));
