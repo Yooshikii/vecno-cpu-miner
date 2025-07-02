@@ -1,5 +1,6 @@
 use arc_swap::{ArcSwapOption, Guard, RefCnt};
 use std::ops::Deref;
+
 use sync::{Arc, Condvar, Mutex};
 
 pub struct Shared<T> {
@@ -15,7 +16,10 @@ pub struct WatchSwap<T> {
 
 impl<T> Clone for WatchSwap<T> {
     fn clone(&self) -> Self {
-        Self { shared: Arc::clone(&self.shared), cached: self.cached.clone() }
+        Self {
+            shared: Arc::clone(&self.shared),
+            cached: self.cached.clone(),
+        }
     }
 }
 
@@ -32,6 +36,7 @@ impl<T> WatchSwap<T> {
             cached: val,
         }
     }
+
     pub fn empty() -> Self {
         Self {
             shared: Arc::new(Shared {
@@ -94,7 +99,7 @@ mod sync {
     compile_error!("Can't use sync primitives both from parking_lot and from shuttle");
 
     #[cfg(feature = "parking_lot")]
-    use parking::{Condvar as CondvarInternal, Mutex as MutexInternal, MutexGuard};
+    use parking_lot::{Condvar as CondvarInternal, Mutex as MutexInternal, MutexGuard};
 
     #[cfg(feature = "shuttle")]
     use shuttle::sync::{Condvar as CondvarInternal, Mutex as MutexInternal, MutexGuard};
@@ -155,10 +160,11 @@ mod sync {
 
 #[cfg(test)]
 mod tests {
-    use crate::swap_rust::{
-        sync::{thread, Arc, Barrier},
-        WatchSwap,
-    };
+    use super::WatchSwap;
+    #[cfg(feature = "shuttle")]
+    use crate::sync::{thread, Arc, Barrier};
+    #[cfg(not(feature = "shuttle"))]
+    use std::{sync::{Arc, Barrier}, thread};
 
     fn channel<T>(val: T) -> (WatchSwap<T>, WatchSwap<T>) {
         let a = WatchSwap::empty();

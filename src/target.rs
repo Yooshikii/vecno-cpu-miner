@@ -33,6 +33,7 @@ impl Uint256 {
         Self(v)
     }
     /// Create an object from a given unsigned 64-bit integer
+ 
     #[inline]
     pub fn from_u64(init: u64) -> Uint256 {
         let mut ret = [0; 4];
@@ -40,12 +41,16 @@ impl Uint256 {
         Uint256(ret)
     }
 
-    /// Creates big integer value from a byte slice using
-    /// little-endian encoding
+    #[inline(always)]
+    pub fn as_bytes(&self) -> [u8; 32] {
+        self.to_le_bytes()
+    }
+
     #[inline(always)]
     pub fn from_le_bytes(bytes: [u8; 32]) -> Uint256 {
         let mut out = [0u64; 4];
         // This should optimize to basically a transmute.
+
         out.iter_mut()
             .zip(bytes.chunks_exact(8))
             .for_each(|(word, bytes)| *word = u64::from_le_bytes(bytes.try_into().unwrap()));

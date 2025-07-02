@@ -1,0 +1,10 @@
+C:\Users\Yoshiki\Downloads\vecno-cpu-miner - argon2\target\release\deps\libasync_stream-943a7e36d093f357.rmeta: C:\Users\Yoshiki\.cargo\bin\registry\src\index.crates.io-1949cf8c6b5b557f\async-stream-0.3.6\src\lib.rs C:\Users\Yoshiki\.cargo\bin\registry\src\index.crates.io-1949cf8c6b5b557f\async-stream-0.3.6\src\async_stream.rs C:\Users\Yoshiki\.cargo\bin\registry\src\index.crates.io-1949cf8c6b5b557f\async-stream-0.3.6\src\next.rs C:\Users\Yoshiki\.cargo\bin\registry\src\index.crates.io-1949cf8c6b5b557f\async-stream-0.3.6\src\yielder.rs
+
+C:\Users\Yoshiki\Downloads\vecno-cpu-miner - argon2\target\release\deps\libasync_stream-943a7e36d093f357.rlib: C:\Users\Yoshiki\.cargo\bin\registry\src\index.crates.io-1949cf8c6b5b557f\async-stream-0.3.6\src\lib.rs C:\Users\Yoshiki\.cargo\bin\registry\src\index.crates.io-1949cf8c6b5b557f\async-stream-0.3.6\src\async_stream.rs C:\Users\Yoshiki\.cargo\bin\registry\src\index.crates.io-1949cf8c6b5b557f\async-stream-0.3.6\src\next.rs C:\Users\Yoshiki\.cargo\bin\registry\src\index.crates.io-1949cf8c6b5b557f\async-stream-0.3.6\src\yielder.rs
+
+C:\Users\Yoshiki\Downloads\vecno-cpu-miner - argon2\target\release\deps\async_stream-943a7e36d093f357.d: C:\Users\Yoshiki\.cargo\bin\registry\src\index.crates.io-1949cf8c6b5b557f\async-stream-0.3.6\src\lib.rs C:\Users\Yoshiki\.cargo\bin\registry\src\index.crates.io-1949cf8c6b5b557f\async-stream-0.3.6\src\async_stream.rs C:\Users\Yoshiki\.cargo\bin\registry\src\index.crates.io-1949cf8c6b5b557f\async-stream-0.3.6\src\next.rs C:\Users\Yoshiki\.cargo\bin\registry\src\index.crates.io-1949cf8c6b5b557f\async-stream-0.3.6\src\yielder.rs
+
+C:\Users\Yoshiki\.cargo\bin\registry\src\index.crates.io-1949cf8c6b5b557f\async-stream-0.3.6\src\lib.rs:
+C:\Users\Yoshiki\.cargo\bin\registry\src\index.crates.io-1949cf8c6b5b557f\async-stream-0.3.6\src\async_stream.rs:
+C:\Users\Yoshiki\.cargo\bin\registry\src\index.crates.io-1949cf8c6b5b557f\async-stream-0.3.6\src\next.rs:
+C:\Users\Yoshiki\.cargo\bin\registry\src\index.crates.io-1949cf8c6b5b557f\async-stream-0.3.6\src\yielder.rs:
