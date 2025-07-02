@@ -8,38 +8,85 @@ use crate::{
     target::{self, Uint256},
     Error,
 };
-
 use blake3;
 use sha3::{Digest, Sha3_256};
 use crate::Hash;
+
 mod hasher;
 mod mem_hash;
 
 /// Computes SHA3-256 hash of a 32-byte input
-fn sha3_hash(input: [u8; 32]) -> [u8; 32] {
+///
+/// # Arguments
+/// * `input` - A 32-byte input array to hash.
+///
+/// # Returns
+/// A `Result` containing the 32-byte SHA3-256 hash or an error if the output length is invalid.
+///
+/// # Errors
+/// Returns an error if the SHA3-256 output cannot be converted to a 32-byte array.
+fn sha3_hash(input: [u8; 32]) -> Result<[u8; 32], &'static str> {
     let mut sha3_hasher = Sha3_256::new();
     sha3_hasher.update(input);
-    sha3_hasher.finalize().as_slice().try_into().expect("SHA-3 output length mismatch")
+    sha3_hasher
+        .finalize()
+        .as_slice()
+        .try_into()
+        .map_err(|_| "SHA3-256 output length mismatch")
 }
 
 /// Computes Blake3 hash of a 32-byte input
+///
+/// # Arguments
+/// * `input` - A 32-byte input array to hash.
+///
+/// # Returns
+/// A 32-byte Blake3 hash.
 fn blake3_hash(input: [u8; 32]) -> [u8; 32] {
     *blake3::hash(&input).as_bytes() // Safe: Blake3 outputs 32 bytes
 }
 
-/// Calculates the number of hash rounds (1–4) based on the first 4 bytes
-fn calculate_rounds(input: [u8; 32]) -> usize {
-    (u32::from_le_bytes(input[0..4].try_into().unwrap_or_default()) % 4 + 1) as usize
+/// Calculates the number of hash rounds based on immutable block header fields
+///
+/// Determines a dynamic number of rounds (1–4) using the SHA3-256 hash of the pre-PoW hash
+/// and the block timestamp. This prevents nonce selection attacks by ensuring the round count
+/// is independent of the nonce.
+///
+/// # Arguments
+/// * `pre_pow_hash` - A 32-byte hash of the block header (excluding nonce and timestamp).
+/// * `timestamp` - The block timestamp as a u64.
+///
+/// # Returns
+/// A `usize` representing the number of rounds (1–4).
+fn calculate_rounds(pre_pow_hash: [u8; 32], timestamp: u64) -> usize {
+    let mut hasher = Sha3_256::new();
+    hasher.update(pre_pow_hash);
+    hasher.update(timestamp.to_le_bytes());
+    let hash = hasher.finalize();
+    (u32::from_le_bytes(hash[0..4].try_into().unwrap_or_default()) % 4 + 1) as usize
 }
 
 /// Performs XOR manipulations on adjacent bytes in 4-byte chunks
+///
+/// Applies XOR operations to adjacent bytes in 4-byte chunks to enhance diffusion.
+///
+/// # Arguments
+/// * `data` - A mutable 32-byte array to manipulate.
 fn bit_manipulations(data: &mut [u8; 32]) {
     for i in (0..32).step_by(4) {
         data[i] ^= data[i + 1];
+        data[i + 2] ^= data[i + 3];
     }
 }
 
 /// Combines SHA3-256 and Blake3 hashes with byte-wise XOR
+///
+/// # Arguments
+/// * `sha3_hash` - A 32-byte SHA3-256 hash.
+/// * `b3_hash` - A 32-byte Blake3 hash.
+///
+/// # Returns
+/// A 32-byte array resulting from the byte-wise XOR of the inputs.
 fn byte_mixing(sha3_hash: &[u8; 32], b3_hash: &[u8; 32]) -> [u8; 32] {
     let mut temp_buf = [0u8; 32];
     for i in 0..32 {
@@ -56,30 +103,61 @@ pub struct State {
     target: Uint256,
     block: RpcBlock,
     hasher: PowHash,
+    pre_pow_hash: [u8; 32], // Store pre-PoW hash for round calculation
+    timestamp: u64, // Store timestamp for round calculation
 }
 
 impl State {
+    /// Creates a new PoW state for a given block
+    ///
+    /// Initializes the PoW state with the block's target difficulty, pre-PoW hash,
+    /// and timestamp. The pre-PoW hash is computed with nonce and timestamp set to 0.
+    ///
+    /// # Arguments
+    /// * `id` - A unique identifier for the state.
+    /// * `block` - The `RpcBlock` containing the block header.
+    ///
+    /// # Returns
+    /// A `Result` containing the initialized `State` or an error if the header is missing.
     #[inline]
     pub fn new(id: usize, block: RpcBlock) -> Result<Self, Error> {
-        let header = &block.header.as_ref().ok_or("Header is missing")?;
-
+        let header = block.header.as_ref().ok_or("Header is missing")?;
+        let timestamp = header.timestamp as u64; // Extract timestamp before moving block
         let target = target::u256_from_compact_target(header.bits);
         let mut hasher = HeaderHasher::new();
         serialize_header(&mut hasher, header, true);
         let pre_pow_hash = hasher.finalize();
-        // PRE_POW_HASH || TIME || 32 zero byte padding || NONCE
-        let hasher = PowHash::new(pre_pow_hash, header.timestamp as u64);
+        let hasher = PowHash::new(pre_pow_hash, timestamp);
 
-        Ok(Self { id, nonce: 0, target, block, hasher })
+        Ok(Self {
+            id,
+            nonce: 0,
+            target,
+            block,
+            hasher,
+            pre_pow_hash: pre_pow_hash.as_bytes().try_into().expect("Pre-PoW hash length mismatch"),
+            timestamp,
+        })
     }
 
+    /// Computes the PoW hash for a given nonce
+    ///
+    /// Combines Blake3, SHA3-256, and memory-hard hashing with a dynamic number of rounds
+    /// based on the pre-PoW hash and timestamp to prevent nonce selection attacks.
+    ///
+    /// # Arguments
+    /// * `nonce` - The nonce to include in the hash computation.
+    ///
+    /// # Returns
+    /// A `Uint256` representing the PoW hash.
     #[inline(always)]
-    /// PRE_POW_HASH || TIME || 32 zero byte padding || NONCE
-    pub fn calculate_pow(&mut self) -> Uint256 {
-        // TODO: Parallelize nonce iteration by cloning State for multiple threads
-        let hash = self.hasher.clone().finalize_with_nonce(self.nonce);
-        let mut hash_bytes: [u8; 32] = hash.as_bytes().try_into().expect("Hash output length mismatch");
-        let rounds = calculate_rounds(hash_bytes);
+    pub fn calculate_pow(&self, nonce: u64) -> Uint256 {
+        let hash = self.hasher.clone().finalize_with_nonce(nonce);
+        let mut hash_bytes: [u8; 32] = hash
+            .as_bytes()
+            .try_into()
+            .expect("Hash output length mismatch");
+        let rounds = calculate_rounds(self.pre_pow_hash, self.timestamp);
         let b3_hash: [u8; 32];
 
         for _ in 0..rounds {
@@ -89,28 +167,38 @@ impl State {
         b3_hash = hash_bytes;
 
         for _ in 0..rounds {
-            hash_bytes = sha3_hash(hash_bytes);
+            hash_bytes = sha3_hash(hash_bytes).expect("SHA3-256 failed");
             bit_manipulations(&mut hash_bytes);
         }
 
         let m_hash = byte_mixing(&hash_bytes, &b3_hash);
-        let final_hash = mem_hash(Hash::from_le_bytes(m_hash));
+        let final_hash = mem_hash(Hash::from_le_bytes(m_hash), self.timestamp);
         Uint256::from_le_bytes(final_hash.as_bytes())
     }
 
     /// Verifies if the PoW hash meets the difficulty target
+    ///
+    /// # Arguments
+    /// * `nonce` - The nonce to verify.
+    ///
+    /// # Returns
+    /// `true` if the PoW hash is less than or equal to the target, `false` otherwise.
     #[inline(always)]
-    pub fn check_pow(&mut self) -> bool {
-        let pow = self.calculate_pow();
-        // The pow hash must be less or equal than the claimed target.
+    pub fn check_pow(&self, nonce: u64) -> bool {
+        let pow = self.calculate_pow(nonce);
         pow <= self.target
     }
 
+    /// Generates a block if the current nonce satisfies the PoW
+    ///
+    /// # Returns
+    /// An `Option<RpcBlock>` containing the block with the updated nonce if the PoW is valid,
+    /// or `None` if it is not.
     #[inline(always)]
     pub fn generate_block_if_pow(&mut self) -> Option<RpcBlock> {
-        self.check_pow().then(|| {
+        self.check_pow(self.nonce).then(|| {
             let mut block = self.block.clone();
-            let header = block.header.as_mut().expect("We checked that a header exists on creation");
+            let header = block.header.as_mut().expect("Header exists on creation");
             header.nonce = self.nonce;
             block
         })
@@ -120,9 +208,22 @@ impl State {
 #[cfg(not(any(target_pointer_width = "64", target_pointer_width = "32")))]
 compile_error!("Supporting only 32/64 bits");
 
+/// Serializes a block header into a hasher
+///
+/// Serializes the header fields in a consistent order, optionally setting nonce and timestamp
+/// to 0 for pre-PoW hashing.
+///
+/// # Arguments
+/// * `hasher` - The hasher to update with serialized data.
+/// * `header` - The block header to serialize.
+/// * `for_pre_pow` - If `true`, sets nonce and timestamp to 0.
 #[inline(always)]
 pub fn serialize_header<H: Hasher>(hasher: &mut H, header: &RpcBlockHeader, for_pre_pow: bool) {
-    let (nonce, timestamp) = if for_pre_pow { (0, 0) } else { (header.nonce, header.timestamp) };
+    let (nonce, timestamp) = if for_pre_pow {
+        (0, 0)
+    } else {
+        (header.nonce, header.timestamp)
+    };
     let num_parents = header.parents.len();
     let version: u16 = header.version.try_into().unwrap();
     hasher.update(version.to_le_bytes()).update((num_parents as u64).to_le_bytes());
@@ -174,6 +275,14 @@ enum FromHexError {
     InvalidHexCharacter { c: char, index: usize },
 }
 
+/// Decodes a hexadecimal string into a byte slice
+///
+/// # Arguments
+/// * `data` - The hexadecimal string to decode.
+/// * `out` - The output byte slice to fill.
+///
+/// # Returns
+/// A `Result` indicating success or a `FromHexError` if decoding fails.
 #[inline(always)]
 fn decode_to_slice<T: AsRef<[u8]>>(data: T, out: &mut [u8]) -> Result<(), FromHexError> {
     let data = data.as_ref();

@@ -1,6 +1,0 @@
-cargo:rerun-if-changed=proto
-cargo:rerun-if-changed=src/asm
-cargo:rerun-if-changed=proto/rpc.proto
-cargo:rerun-if-changed=proto/p2p.proto
-cargo:rerun-if-changed=proto/messages.proto
-cargo:rerun-if-changed=proto
