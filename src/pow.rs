@@ -11,6 +11,8 @@ use crate::{
 use blake3;
 use sha3::{Digest, Sha3_256};
 use crate::Hash;
+use std::error::Error as StdError;
+use std::fmt;
 
 mod hasher;
 mod mem_hash;
@@ -63,7 +65,7 @@ fn calculate_rounds(pre_pow_hash: [u8; 32], timestamp: u64) -> usize {
     hasher.update(pre_pow_hash);
     hasher.update(timestamp.to_le_bytes());
     let hash = hasher.finalize();
-    (u32::from_le_bytes(hash[0..4].try_into().unwrap_or_default()) % 4 + 1) as usize
+    (u32:: from_le_bytes(hash[0..4].try_into().unwrap_or_default()) % 4 + 1) as usize
 }
 
 /// Performs XOR manipulations on adjacent bytes in 4-byte chunks
@@ -105,13 +107,14 @@ pub struct State {
     hasher: PowHash,
     pre_pow_hash: [u8; 32], // Store pre-PoW hash for round calculation
     timestamp: u64, // Store timestamp for round calculation
+    merkle_root: [u8; 32], // Store merkle_root for mem_hash
 }
 
 impl State {
     /// Creates a new PoW state for a given block
     ///
     /// Initializes the PoW state with the block's target difficulty, pre-PoW hash,
-    /// and timestamp. The pre-PoW hash is computed with nonce and timestamp set to 0.
+    /// timestamp, and merkle_root. The pre-PoW hash is computed with nonce and timestamp set to 0.
     ///
     /// # Arguments
     /// * `id` - A unique identifier for the state.
@@ -128,6 +131,8 @@ impl State {
         serialize_header(&mut hasher, header, true);
         let pre_pow_hash = hasher.finalize();
         let hasher = PowHash::new(pre_pow_hash, timestamp);
+        let mut merkle_root = [0u8; 32];
+        decode_to_slice(&header.hash_merkle_root, &mut merkle_root).map_err(|e| Error::from(format!("Failed to decode merkle root: {}", e)))?;
 
         Ok(Self {
             id,
@@ -137,6 +142,7 @@ impl State {
             hasher,
             pre_pow_hash: pre_pow_hash.as_bytes().try_into().expect("Pre-PoW hash length mismatch"),
             timestamp,
+            merkle_root,
         })
     }
 
@@ -172,7 +178,13 @@ impl State {
         }
 
         let m_hash = byte_mixing(&hash_bytes, &b3_hash);
-        let final_hash = mem_hash(Hash::from_le_bytes(m_hash), self.timestamp);
+        let final_hash = mem_hash(
+            Hash::from_le_bytes(m_hash), // Changed to from_bytes to match mem_hash.rs
+            self.timestamp,
+            nonce,
+            self.merkle_root,
+            &self.target,
+        );
         Uint256::from_le_bytes(final_hash.as_bytes())
     }
 
@@ -267,13 +279,26 @@ pub fn serialize_header<H: Hasher>(hasher: &mut H, header: &RpcBlockHeader, for_
     hasher.update(hash);
 }
 
-#[allow(dead_code)]
 #[derive(Debug)]
 enum FromHexError {
     OddLength,
     InvalidStringLength,
     InvalidHexCharacter { c: char, index: usize },
 }
+
+impl fmt::Display for FromHexError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            FromHexError::OddLength => write!(f, "hex string has odd length"),
+            FromHexError::InvalidStringLength => write!(f, "hex string length does not match output buffer"),
+            FromHexError::InvalidHexCharacter { c, index } => {
+                write!(f, "invalid hex character '{}' at index {}", c, index)
+            }
+        }
+    }
+}
+
+impl StdError for FromHexError {}
 
 /// Decodes a hexadecimal string into a byte slice
 ///
