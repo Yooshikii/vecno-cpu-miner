@@ -6,7 +6,7 @@ use crate::target::Uint256;
 
 /// Calculates the dynamic memory size for memory-hard hashing
 ///
-/// Computes a fixed 4KB memory size for normal hashes and a randomized 4MB–8MB size for close hashes
+/// Computes a fixed 4KB memory size for normal hashes and a randomized 2MB–5MB size for close hashes
 /// based on the block hash, seed, nonce, merkle_root, and target difficulty.
 /// Ensures the size is a multiple of 4 bytes for u32 alignment.
 ///
@@ -46,9 +46,9 @@ pub fn calculate_memory_size(
     let hash = hasher.finalize();
     let hash_bytes = hash.as_bytes();
 
-    // Memory size for close hashes: 4MB–8MB
-    let min_mem_kb = 4_000; // 4MB
-    let max_mem_kb = 8_000; // 8MB
+    // Memory size for close hashes: 2MB–5MB
+    let min_mem_kb = 2_000; // 2MB
+    let max_mem_kb = 5_000; // 5MB
     let mem_size_kb = min_mem_kb + (u32::from_le_bytes(hash_bytes[0..4].try_into().unwrap()) % (max_mem_kb - min_mem_kb));
 
     let h_mem = (mem_size_kb as usize) * 1024;
@@ -425,7 +425,7 @@ fn process_round(
 
 /// Memory-hard hash function using a dynamic memory buffer and Feistel network
 ///
-/// Computes a memory-hard hash with a fixed 4KB memory for normal hashes and 4MB–8MB for close hashes.
+/// Computes a memory-hard hash with a fixed 4KB memory for normal hashes and 2MB–5MB for close hashes.
 /// Applies a dynamic number of rounds with memory-dependent branching, a Feistel network,
 /// constant-time memory access for close hashes, and a dynamic S-box.
 ///
@@ -446,7 +446,7 @@ pub fn mem_hash(
     target: &Uint256,
 ) -> Hash {
     // Initialize parameters
-    let max_h_mem = 8 * 1024 * 1024; // 8MB max
+    let max_h_mem = 5 * 1024 * 1024; // 5MB max
     let (mut h_mem, mut h_mem_u32) = calculate_memory_size(&block_hash.as_bytes(), seed, nonce, &merkle_root, target, false);
     let mut memory = vec![0u8; h_mem];
     let block_hash_bytes = block_hash.as_bytes();
