@@ -16,10 +16,7 @@ pub struct WatchSwap<T> {
 
 impl<T> Clone for WatchSwap<T> {
     fn clone(&self) -> Self {
-        Self {
-            shared: Arc::clone(&self.shared),
-            cached: self.cached.clone(),
-        }
+        Self { shared: Arc::clone(&self.shared), cached: self.cached.clone() }
     }
 }
 
@@ -164,7 +161,10 @@ mod tests {
     #[cfg(feature = "shuttle")]
     use crate::sync::{thread, Arc, Barrier};
     #[cfg(not(feature = "shuttle"))]
-    use std::{sync::{Arc, Barrier}, thread};
+    use std::{
+        sync::{Arc, Barrier},
+        thread,
+    };
 
     fn channel<T>(val: T) -> (WatchSwap<T>, WatchSwap<T>) {
         let a = WatchSwap::empty();

@@ -41,20 +41,6 @@ impl Uint256 {
         Uint256(ret)
     }
 
-    /// Returns the number of significant bits in the Uint256
-    /// Counts the number of bits from the most significant non-zero bit.
-    #[inline]
-    pub fn bits(&self) -> u32 {
-        let mut bits = 0;
-        for (i, &word) in self.0.iter().enumerate().rev() {
-            if word != 0 {
-                bits = (i as u32 * 64) + (64 - word.leading_zeros());
-                break;
-            }
-        }
-        bits
-    }
-
     #[inline(always)]
     pub fn as_bytes(&self) -> [u8; 32] {
         self.to_le_bytes()
@@ -116,20 +102,5 @@ impl core::ops::Shl<usize> for Uint256 {
             }
         }
         Uint256(ret)
-    }
-}
-
-impl core::ops::Add for Uint256 {
-    type Output = Uint256;
-
-    fn add(self, rhs: Uint256) -> Uint256 {
-        let mut result = [0u64; 4];
-        let mut carry = 0u64;
-        for i in 0..4 {
-            let sum = self.0[i].wrapping_add(rhs.0[i]).wrapping_add(carry);
-            result[i] = sum;
-            carry = (sum < self.0[i] || (sum == self.0[i] && carry > 0)) as u64;
-        }
-        Uint256(result)
     }
 }
